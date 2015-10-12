@@ -32,7 +32,7 @@
         "initialize",
         "test",
         "development",
-        "production",
+        "production"
     ],
     "dependencies": {
         "async": "^1.4.2",
