@@ -1,0 +1,53 @@
+{
+    "name": "seed-mongoose",
+    "version": "0.1.0",
+    "description": "DRY data seeding for mongoose",
+    "main": "index.js",
+    "scripts": {
+        "test": "grunt test"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/lykmapipo/seed-mongoose.git"
+    },
+    "author": "Lally Elias",
+    "license": "MIT",
+    "bugs": {
+        "url": "https://github.com/lykmapipo/seed-mongoose/issues"
+    },
+    "homepage": "https://github.com/lykmapipo/seed-mongoose",
+    "contributors": [{
+        "name": "lykmapipo",
+        "github": "https://github.com/lykmapipo"
+    }],
+    "keywords": [
+        "mongoose",
+        "mongoose-plugin",
+        "seed",
+        "fixtures",
+        "factory",
+        "database",
+        "load",
+        "populate",
+        "initialize",
+        "test",
+        "development",
+        "production",
+    ],
+    "dependencies": {
+        "async": "^1.4.2",
+        "inflection": "^1.7.2",
+        "lodash": "^3.10.1",
+        "require-all": "^1.1.0"
+    },
+    "devDependencies": {
+        "chai": "^1.10.0",
+        "faker": "^2.1.2",
+        "grunt": "^0.4.5",
+        "grunt-contrib-jshint": "^0.11.2",
+        "grunt-mocha-test": "^0.12.7",
+        "jshint-stylish": "^1.0.1",
+        "mocha": "^2.1.0",
+        "mongoose": "^4.1.10"
+    }
+}
