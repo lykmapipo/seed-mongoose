@@ -33,7 +33,7 @@ mongoose.connect('mongodb://localhost/myapp');
 ## How it works
 By default `seed-mongoose` look for environment specific seeds in the `seeds` directory inside `process.cwd()` of your application. Example, if you need to seed your application during `test` you will have to create `seeds/test` and add `model seed files` inside it.
 
-`seed-mongoose` will load any file suffix-ed with `Seed` as a seed. Example, if you want to seed your `User` model during `test` your need to write your seed as folow:
+`seed-mongoose` will load any file suffix-ed with `Seed` as a seed unless custom `suffix` provided in [configurations](#configurations). Example, if you want to seed your `User` model during `test` your need to write your seed as folow:
 
 ```js
 //in seeds/test/UserSeed.js
