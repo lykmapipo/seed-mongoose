@@ -26,6 +26,10 @@ function Seed(options) {
         //relative to `process.cwd()`
         path: 'seeds',
 
+        //suffix to use match seeds when loading
+        //seeds from a seed directory
+        suffix: 'Seed',
+
         //logger to log seeding progress
         logger: console,
 
@@ -149,7 +153,7 @@ Seed.prototype.prepareWork = function(seeds) {
     _.keys(seeds)
         .forEach(function(seed) {
             // deduce model name
-            var modelName = seed.replace(/Seed$/, '');
+            var modelName = seed.replace(new RegExp(this.options.suffix + '$'), '');
 
             //pluralize model global id if enable
             modelName = inflection.classify(modelName);
@@ -196,7 +200,7 @@ Seed.prototype.load = function(done) {
     //in   `seedsPath`
     var seeds = require('require-all')({
         dirname: seedsPath,
-        filter: /(.+Seed)\.js$/,
+        filter: new RegExp('(.+' + config.suffix + ')\.js$'),
         excludeDirs: /^\.(git|svn)$/
     });
 
