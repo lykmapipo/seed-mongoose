@@ -48,7 +48,7 @@ describe('seed', function() {
                         done();
                     }
                 });
-        }, 500);
+        }, 1000);
     });
 
     it('should be able to extend options', function(done) {
@@ -253,6 +253,26 @@ describe('seed', function() {
 
             done(error, result);
         });
+    });
+
+    it('should be able to load seeds with custom suffix', function(done) {
+        var $seed = seed({
+            cwd: process.cwd(),
+            path: 'seeds',
+            suffix: '_seed',
+            environment: 'development',
+            active: false
+        });
+
+        $seed.load(function(error, result) {
+
+            expect(result.environment).to.equal('development');
+            expect(result.data).to.not.be.null;
+
+            done(error, result);
+
+        });
+
     });
 
 });
