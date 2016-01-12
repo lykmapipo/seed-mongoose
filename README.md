@@ -123,6 +123,7 @@ var mongoose = require('mongoose');
 
 - `cwd` current project working directory. Default to `process.cwd()`
 - `path` seed path relative to `cwd`. Default to `seeds`
+- `suffix` suffix to use match seeds when loading seeds from a seed directory. Default to `Seed`
 - `logger` logger to be used to log progress. Default to `console`
 - `environment` seeding environment. Default to `process.env.NODE_ENV`
 - `active` signal whether seeding if enable. Default to `true`
