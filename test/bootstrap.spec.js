@@ -10,11 +10,11 @@ var mongoose = require('mongoose');
 
 
 //additional faker helpers
-faker.lorem.word = function() {
-    var words = faker.lorem.words(20);
-    var r1 = faker.random.number(15);
-    var r2 = faker.random.number(15);
-    return words[r1] + words[r2];
+faker.lorem.word = function () {
+  var words = faker.lorem.words(20);
+  var r1 = faker.random.number(15);
+  var r2 = faker.random.number(15);
+  return words[r1] + words[r2];
 };
 
 
@@ -22,34 +22,34 @@ faker.lorem.word = function() {
  * @description wipe all mongoose model data and drop all indexes
  */
 function wipe(done) {
-    var cleanups = mongoose.modelNames()
-        .map(function(modelName) {
-            //grab mongoose model
-            return mongoose.model(modelName);
-        })
-        .map(function(Model) {
-            return async.series.bind(null, [
-                //clean up all model data
-                Model.remove.bind(Model),
-                //drop all indexes
-                Model.collection.dropAllIndexes.bind(Model.collection)
-            ]);
-        });
-
-    //run all clean ups parallel
-    async.parallel(cleanups, function(error) {
-        if (error && error.message !== 'ns not found') {
-            done(error);
-        } else {
-            //drop database
-            mongoose.connection.db.dropDatabase();
-
-            done(null);
-        }
+  var cleanups = mongoose.modelNames()
+    .map(function (modelName) {
+      //grab mongoose model
+      return mongoose.model(modelName);
+    })
+    .map(function (Model) {
+      return async.series.bind(null, [
+        //clean up all model data
+        Model.remove.bind(Model),
+        //drop all indexes
+        Model.collection.dropAllIndexes.bind(Model.collection)
+      ]);
     });
+
+  //run all clean ups parallel
+  async.parallel(cleanups, function (error) {
+    if (error && error.message !== 'ns not found') {
+      done(error);
+    } else {
+      //drop database
+      mongoose.connection.db.dropDatabase();
+
+      done(null);
+    }
+  });
 }
 
 //restore initial environment
-after(function(done) {
-    wipe(done);
+after(function (done) {
+  wipe(done);
 });

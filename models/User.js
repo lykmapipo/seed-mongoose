@@ -5,12 +5,12 @@ var mongoose = require('mongoose');
 var Schema = mongoose.Schema;
 
 var UserSchema = new Schema({
-    username: {
-        type: String
-    },
-    email: {
-        type: String
-    }
+  username: {
+    type: String
+  },
+  email: {
+    type: String
+  }
 });
 
 //export model

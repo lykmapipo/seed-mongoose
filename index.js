@@ -14,59 +14,59 @@ var mongoose = require('mongoose');
  * @param  {Object} options seed configurations
  */
 function Seed(options) {
-    //defaults configurations
-    this.options = {
-        //set seeding to be active by default
-        active: true,
+  //defaults configurations
+  this.options = {
+    //set seeding to be active by default
+    active: true,
 
-        //current working directory
-        cwd: process.cwd(),
+    //current working directory
+    cwd: process.cwd(),
 
-        //directory where seeds resides
-        //relative to `process.cwd()`
-        path: 'seeds',
+    //directory where seeds resides
+    //relative to `process.cwd()`
+    path: 'seeds',
 
-        //suffix to use match seeds when loading
-        //seeds from a seed directory
-        suffix: 'Seed',
+    //suffix to use match seeds when loading
+    //seeds from a seed directory
+    suffix: 'Seed',
 
-        //logger to log seeding progress
-        logger: console,
+    //logger to log seeding progress
+    logger: console,
 
-        //detect seeding environment
-        //default to development environment
-        environment: _.get(process.env, 'NODE_ENV', 'development')
+    //detect seeding environment
+    //default to development environment
+    environment: _.get(process.env, 'NODE_ENV', 'development')
 
-    };
+  };
 
-    //extend default options
-    this.options = _.merge(this.options, options);
+  //extend default options
+  this.options = _.merge(this.options, options);
 
-    //normalize logger
-    this.options.logger.debug = this.options.logger.debug ||
-        (this.options.logger.log || this.options.logger.info);
+  //normalize logger
+  this.options.logger.debug = this.options.logger.debug ||
+    (this.options.logger.log || this.options.logger.info);
 
-    this.options.logger.error = this.options.logger.error ||
-        (this.options.logger.log || this.options.logger.info);
+  this.options.logger.error = this.options.logger.error ||
+    (this.options.logger.log || this.options.logger.info);
 
-    //reference mongoose connection
-    var connection = mongoose.connection;
+  //reference mongoose connection
+  var connection = mongoose.connection;
 
-    //on mongoose connecting
-    //load seeds if seeding is enabled
-    if (this.options.active) {
-        connection.on('connecting', function() {
-            this.load(function(error, result) {
-                if (error) {
-                    //notify seeding error
-                    connection.emit('seeding error', error);
-                } else {
-                    //notify seeding succeed
-                    connection.emit('seeding succeed', result);
-                }
-            });
-        }.bind(this));
-    }
+  //on mongoose connecting
+  //load seeds if seeding is enabled
+  if (this.options.active) {
+    connection.on('connecting', function () {
+      this.load(function (error, result) {
+        if (error) {
+          //notify seeding error
+          connection.emit('seeding error', error);
+        } else {
+          //notify seeding succeed
+          connection.emit('seeding succeed', result);
+        }
+      });
+    }.bind(this));
+  }
 }
 
 
@@ -83,54 +83,54 @@ function Seed(options) {
  *
  * @private
  */
-Seed.prototype.prepare = function(work, model, seedData) {
-    //reference configurations
-    var logger = this.options.logger;
+Seed.prototype.prepare = function (work, model, seedData) {
+  //reference configurations
+  var logger = this.options.logger;
 
-    //is data just a plain object
-    if (_.isPlainObject(seedData)) {
-        //push work to be done
-        work.push(function(next) {
-            //create seed function
-            model.findOneAndUpdate(seedData, seedData, {
-                new: true,
-                upsert: true
-            }, next);
-        });
-    }
+  //is data just a plain object
+  if (_.isPlainObject(seedData)) {
+    //push work to be done
+    work.push(function (next) {
+      //create seed function
+      model.findOneAndUpdate(seedData, seedData, {
+        new: true,
+        upsert: true
+      }, next);
+    });
+  }
 
-    //is array data
-    if (_.isArray(seedData)) {
-        _.forEach(seedData, function(data) {
-            //push work to be done
-            work.push(function(next) {
-                //create seed function
-                model.findOneAndUpdate(data, data, {
-                    new: true,
-                    upsert: true
-                }, next);
-            });
-        });
-    }
+  //is array data
+  if (_.isArray(seedData)) {
+    _.forEach(seedData, function (data) {
+      //push work to be done
+      work.push(function (next) {
+        //create seed function
+        model.findOneAndUpdate(data, data, {
+          new: true,
+          upsert: true
+        }, next);
+      });
+    });
+  }
 
-    //is functional data
-    if (_.isFunction(seedData)) {
-        //evaluate function to obtain data
-        seedData(function(error, data) {
-            //current log error and continue
-            //
-            //TODO should we throw?
-            if (error) {
-                logger.error(error);
-            }
+  //is functional data
+  if (_.isFunction(seedData)) {
+    //evaluate function to obtain data
+    seedData(function (error, data) {
+      //current log error and continue
+      //
+      //TODO should we throw?
+      if (error) {
+        logger.error(error);
+      }
 
-            //invoke prepare with data
-            else {
-                //this refer to seed instance context
-                this.prepare(work, model, data);
-            }
-        }.bind(this));
-    }
+      //invoke prepare with data
+      else {
+        //this refer to seed instance context
+        this.prepare(work, model, data);
+      }
+    }.bind(this));
+  }
 };
 
 
@@ -142,35 +142,36 @@ Seed.prototype.prepare = function(work, model, seedData) {
  * @return {Array} a collection of works to be performed during data loading
  * @private
  */
-Seed.prototype.prepareWork = function(seeds) {
-    //work to be done
-    //in parallel during
-    //data seeding
-    var work = [];
+Seed.prototype.prepareWork = function (seeds) {
+  //work to be done
+  //in parallel during
+  //data seeding
+  var work = [];
 
-    //prepare all seeds
-    //data for parallel execution
-    _.keys(seeds)
-        .forEach(function(seed) {
-            // deduce model name
-            var modelName = seed.replace(new RegExp(this.options.suffix + '$'), '');
+  //prepare all seeds
+  //data for parallel execution
+  _.keys(seeds)
+    .forEach(function (seed) {
+      // deduce model name
+      var modelName = seed.replace(new RegExp(this.options.suffix + '$'),
+        '');
 
-            //pluralize model global id if enable
-            modelName = inflection.classify(modelName);
+      //pluralize model global id if enable
+      modelName = inflection.classify(modelName);
 
-            //grab mongoose model from its name
-            var Model = mongoose.model(modelName);
+      //grab mongoose model from its name
+      var Model = mongoose.model(modelName);
 
-            //grab data to load
-            //from the seed data attribute
-            var seedData = seeds[seed];
+      //grab data to load
+      //from the seed data attribute
+      var seedData = seeds[seed];
 
-            //prepare work from seed data
-            this.prepare(work, Model, seedData);
+      //prepare work from seed data
+      this.prepare(work, Model, seedData);
 
-        }.bind(this));
+    }.bind(this));
 
-    return work;
+  return work;
 };
 
 
@@ -180,65 +181,65 @@ Seed.prototype.prepareWork = function(seeds) {
  * @param {Function} done  a callback to invoke on after seeding
  * @private
  */
-Seed.prototype.load = function(done) {
-    //reference logger
-    var config = this.options;
-    var logger = config.logger;
+Seed.prototype.load = function (done) {
+  //reference logger
+  var config = this.options;
+  var logger = config.logger;
 
-    //deduce seeds path to use
-    //based on current environment
-    var seedsPath =
-        path.join(config.cwd, config.path, config.environment);
+  //deduce seeds path to use
+  //based on current environment
+  var seedsPath =
+    path.join(config.cwd, config.path, config.environment);
 
-    //log seed environment
-    logger.debug('start seeding %s data', config.environment);
+  //log seed environment
+  logger.debug('start seeding %s data', config.environment);
 
-    //log seed location
-    logger.debug('seeding from %s', seedsPath);
+  //log seed location
+  logger.debug('seeding from %s', seedsPath);
 
-    //load all seeds available
-    //in   `seedsPath`
-    var seeds = require('require-all')({
-        dirname: seedsPath,
-        filter: new RegExp('(.+' + config.suffix + ')\.js$'),
-        excludeDirs: /^\.(git|svn)$/
+  //load all seeds available
+  //in   `seedsPath`
+  var seeds = require('require-all')({
+    dirname: seedsPath,
+    filter: new RegExp('(.+' + config.suffix + ')\.js$'),
+    excludeDirs: /^\.(git|svn)$/
+  });
+
+  //prepare seeding work to perfom
+  var work = this.prepareWork(seeds);
+
+  //if there is a work to perform
+  if (_.size(work) > 0) {
+    //now lets do the work
+    //in parallel fashion
+    async.parallel(work, function (error, results) {
+      //signal seeding complete
+      logger.debug('complete seeding %s data', config.environment);
+
+      done(error, {
+        environment: config.environment,
+        data: results
+      });
     });
-
-    //prepare seeding work to perfom
-    var work = this.prepareWork(seeds);
-
-    //if there is a work to perform
-    if (_.size(work) > 0) {
-        //now lets do the work
-        //in parallel fashion
-        async.parallel(work, function(error, results) {
-            //signal seeding complete
-            logger.debug('complete seeding %s data', config.environment);
-
-            done(error, {
-                environment: config.environment,
-                data: results
-            });
-        });
-    }
-    //nothing to perform back-off
-    else {
-        done();
-    }
+  }
+  //nothing to perform back-off
+  else {
+    done();
+  }
 };
 
 
 //exports
-module.exports = function(options) {
-    //ensure singleton
-    if (!Seed.singleton) {
-        Seed.singleton = new Seed(options);
-    }
+module.exports = function (options) {
+  //ensure singleton
+  if (!Seed.singleton) {
+    Seed.singleton = new Seed(options);
+  }
 
-    //extend options otherwise
-    if (options && _.isPlainObject(options)) {
-        Seed.singleton.options = _.merge(Seed.singleton.options, options);
-    }
+  //extend options otherwise
+  if (options && _.isPlainObject(options)) {
+    Seed.singleton.options = _.merge(Seed.singleton.options, options);
+  }
 
-    return Seed.singleton;
+  return Seed.singleton;
 };
