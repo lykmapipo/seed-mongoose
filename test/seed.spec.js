@@ -19,7 +19,6 @@ describe('seed', function () {
     mongoose.connect('mongodb://localhost/seed-mongoose');
   });
 
-
   it('should be a functional module', function (done) {
     expect(seed).to.be.a('function');
     done();

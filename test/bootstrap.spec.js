@@ -4,19 +4,11 @@
 process.env.NODE_ENV = 'test';
 
 //dependencies
-var faker = require('faker');
 var async = require('async');
 var mongoose = require('mongoose');
 
-
-//additional faker helpers
-faker.lorem.word = function () {
-  var words = faker.lorem.words(20);
-  var r1 = faker.random.number(15);
-  var r2 = faker.random.number(15);
-  return words[r1] + words[r2];
-};
-
+//allow mongoose query debuging
+// mongoose.set('debug', true);
 
 /**
  * @description wipe all mongoose model data and drop all indexes
@@ -43,7 +35,6 @@ function wipe(done) {
     } else {
       //drop database
       mongoose.connection.db.dropDatabase();
-
       done(null);
     }
   });

@@ -73,6 +73,198 @@ function Seed(options) {
 }
 
 
+/**
+ * @description prepare relation to be pre save and post saved for a given
+ *              model
+ * @param  {Model} model valid mongoose model under seed
+ * @return {Object}        preSave-d and postSave-d metadata
+ * @private
+ */
+Seed.prototype.cascade = function (model) {
+
+  //prepare cascades options
+  var cascades = {
+    preSave: [],
+    postSave: []
+  };
+
+  model.schema.eachPath(function (path, schemaType) {
+
+    //handle single ref for pre save
+    var isObjectId = schemaType && schemaType.instance &&
+      schemaType.instance === 'ObjectID';
+
+    var hasRef = schemaType.instance && schemaType.options &&
+      schemaType.options.ref;
+
+    if (isObjectId && hasRef) {
+      cascades.preSave.push({
+        ref: schemaType.options.ref,
+        path: path
+      });
+    }
+
+
+    //handle array of ref for post save
+    var isObjectIdArray = schemaType && schemaType.instance &&
+      schemaType.instance === 'Array' && schemaType.caster &&
+      schemaType.caster.instance === 'ObjectID';
+
+    hasRef = schemaType.instance && schemaType.options &&
+      (schemaType.options.ref || _.get(schemaType, 'caster.options.ref'));
+
+    if (isObjectIdArray && hasRef) {
+      cascades.postSave.push({
+        ref: schemaType.options.ref || _.get(schemaType,
+          'caster.options.ref'),
+        path: path
+      });
+    }
+
+  });
+
+  return cascades;
+
+};
+
+
+/**
+ * @description seed a particular model with provided data. In case of related 
+ *              model try to pre save and post save them.
+ * @param  {Model}   model current model under seed
+ * @param  {Object}   data  model data to be seed-ed
+ * @param  {Function} done  a callback to invoke on success or failure
+ * @return {Object}
+ * @private
+ */
+Seed.prototype.seed = function (model, data, done) {
+
+  //obtain cascades options
+  var cascades = this.cascade(model);
+
+  //prepare pre saved relations
+  var preSaves = {};
+
+  cascades.preSave.map(function (preSave) {
+
+    //obtain related model
+    var Relation = mongoose.model(preSave.ref);
+
+    //obtain value from updates
+    var value = _.get(data, preSave.path);
+
+    //check if its allowed value to be persisted
+    var isAllowedValue = value && _.isPlainObject(value);
+
+    //push into stack relations to be created
+    //before saving
+    if (Relation && isAllowedValue) {
+
+      preSaves[preSave.path] = function (next) {
+
+        //upsert relations
+        Relation.findOneAndUpdate(value, value, {
+          new: true,
+          upsert: true,
+          runValidators: true,
+          setDefaultsOnInsert: true
+        }, next);
+
+      };
+
+    }
+
+  });
+
+  //prepare post saves
+  var postSaves = {};
+
+  cascades.postSave.map(function (postSave) {
+
+    //obtain related model
+    var Relation = mongoose.model(postSave.ref);
+
+    //obtain value from updates
+    var values = _.get(data, postSave.path);
+    values = _.compact([].concat(values));
+
+    //remove path data to fix cast errors
+    data = _.omit(data, postSave.path);
+
+    //check if its allowed value to be persisted
+    var isAllowedValue = values && _.isArray(values);
+
+    //push into stack relations to be created
+    //before saving
+    if (Relation && isAllowedValue) {
+
+      var works = [];
+
+      values.forEach(function (value) {
+
+        works.push(function (next) {
+
+          //upsert relations
+          Relation.findOneAndUpdate(value, value, {
+            new: true,
+            upsert: true,
+            runValidators: true,
+            setDefaultsOnInsert: true
+          }, next);
+
+        });
+
+      });
+
+      postSaves[postSave.path] = function (next) {
+        async.parallel(_.compact(works), next);
+      };
+
+    }
+
+  });
+
+  async.waterfall([
+
+    function preSave(next) {
+      if (_.keys(preSaves).length > 0) {
+        async.parallel(preSaves, next);
+      } else {
+        next(null, {});
+      }
+    },
+
+    function save(results, next) {
+      //ensure conditions and updates
+      results = _.mapValues(results, '_id');
+      data = _.merge({}, data, results);
+      data = _.merge({}, data, results);
+
+      model.findOneAndUpdate(data, data, {
+        new: true,
+        upsert: true,
+        runValidators: true,
+        setDefaultsOnInsert: true
+      }, next);
+
+    },
+
+    function postSave(saved, next) {
+      if (_.keys(postSaves).length > 0) {
+        async.parallel(postSaves, function (error, results) {
+          _.forEach(results, function (value, key) {
+            saved[key] = _.map(value, '_id');
+          });
+          next(error, saved);
+        });
+      } else {
+        next(null, saved);
+      }
+    }
+  ], done);
+
+};
+
 
 /**
  * @description Take seed data and check if it is of array or object type
@@ -98,12 +290,9 @@ Seed.prototype.prepare = function (work, model, seedData) {
     work.push(function (next) {
 
       //create seed function
-      model.findOneAndUpdate(seedData, seedData, {
-        new: true,
-        upsert: true
-      }, next);
+      this.seed(model, seedData, next);
 
-    });
+    }.bind(this));
 
   }
 
@@ -116,14 +305,11 @@ Seed.prototype.prepare = function (work, model, seedData) {
       work.push(function (next) {
 
         //create seed function
-        model.findOneAndUpdate(data, data, {
-          new: true,
-          upsert: true
-        }, next);
+        this.seed(model, data, next);
 
-      });
+      }.bind(this));
 
-    });
+    }.bind(this));
 
   }
 
@@ -235,9 +421,9 @@ Seed.prototype.load = function (done) {
     //now lets do the work
     //in parallel fashion
     async.parallel(work, function (error, results) {
+
       //signal seeding complete
       logger.debug('complete seeding %s data', config.environment);
-
       done(error, {
         environment: config.environment,
         data: results

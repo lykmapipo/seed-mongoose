@@ -7,11 +7,32 @@ var faker = require('faker');
 module.exports = function (done) {
 
   var data = [{
+    parent: {
+      username: faker.internet.userName(),
+      email: faker.internet.email()
+    },
     username: faker.internet.userName(),
-    email: faker.internet.email()
+    email: faker.internet.email(),
+
+    children: [{
+      username: faker.internet.userName(),
+      email: faker.internet.email()
+    }, {
+      username: faker.internet.userName(),
+      email: faker.internet.email()
+    }],
+
+    kids: [{
+      username: faker.internet.userName(),
+      email: faker.internet.email()
+    }, {
+      username: faker.internet.userName(),
+      email: faker.internet.email()
+    }]
+
   }, {
     username: faker.internet.userName(),
-    email: faker.internet.email()
+    email: faker.internet.email(),
   }];
 
   done(null, data);
