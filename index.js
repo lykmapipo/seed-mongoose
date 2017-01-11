@@ -1,11 +1,13 @@
 'use strict';
 
+
 //dependencies
 var path = require('path');
 var _ = require('lodash');
 var async = require('async');
 var inflection = require('inflection');
 var mongoose = require('mongoose');
+
 
 /**
  * @function
@@ -14,6 +16,7 @@ var mongoose = require('mongoose');
  * @param  {Object} options seed configurations
  */
 function Seed(options) {
+
   //defaults configurations
   this.options = {
     //set seeding to be active by default
@@ -40,7 +43,7 @@ function Seed(options) {
   };
 
   //extend default options
-  this.options = _.merge(this.options, options);
+  this.options = _.merge({}, this.options, options);
 
   //normalize logger
   this.options.logger.debug = this.options.logger.debug ||
@@ -54,7 +57,7 @@ function Seed(options) {
 
   //on mongoose connecting
   //load seeds if seeding is enabled
-  if (this.options.active) {
+  if (connection && this.options.active) {
     connection.on('connecting', function () {
       this.load(function (error, result) {
         if (error) {
@@ -79,7 +82,8 @@ function Seed(options) {
  * @param  {Object} model   A valid mongoose model
  * @param  {Object|Array|Function} seedData An array or object contains 
  *                                          data or a function to be evaluated
- *                                          to obtain data to seeded into database
+ *                                          to obtain data to seeded into 
+ *                                          database
  *
  * @private
  */
@@ -89,32 +93,43 @@ Seed.prototype.prepare = function (work, model, seedData) {
 
   //is data just a plain object
   if (_.isPlainObject(seedData)) {
+
     //push work to be done
     work.push(function (next) {
+
       //create seed function
       model.findOneAndUpdate(seedData, seedData, {
         new: true,
         upsert: true
       }, next);
+
     });
+
   }
 
   //is array data
   if (_.isArray(seedData)) {
+
     _.forEach(seedData, function (data) {
+
       //push work to be done
       work.push(function (next) {
+
         //create seed function
         model.findOneAndUpdate(data, data, {
           new: true,
           upsert: true
         }, next);
+
       });
+
     });
+
   }
 
   //is functional data
   if (_.isFunction(seedData)) {
+
     //evaluate function to obtain data
     seedData(function (error, data) {
       //current log error and continue
@@ -126,11 +141,16 @@ Seed.prototype.prepare = function (work, model, seedData) {
 
       //invoke prepare with data
       else {
+        //TODO push fn or seed obj & array
+
         //this refer to seed instance context
         this.prepare(work, model, data);
       }
+
     }.bind(this));
+
   }
+
 };
 
 
@@ -138,7 +158,8 @@ Seed.prototype.prepare = function (work, model, seedData) {
  * @function
  * @description prepare work to be performed during seeding the data
  * @param {Object} config seeding configurations
- * @param  {Object} seeds environment specific loaded seeds from the seeds directory
+ * @param  {Object} seeds environment specific loaded seeds from the seeds 
+ *                        directory
  * @return {Array} a collection of works to be performed during data loading
  * @private
  */
@@ -153,8 +174,8 @@ Seed.prototype.prepareWork = function (seeds) {
   _.keys(seeds)
     .forEach(function (seed) {
       // deduce model name
-      var modelName = seed.replace(new RegExp(this.options.suffix + '$'),
-        '');
+      var modelName =
+        seed.replace(new RegExp(this.options.suffix + '$'), '');
 
       //pluralize model global id if enable
       modelName = inflection.classify(modelName);
@@ -172,6 +193,7 @@ Seed.prototype.prepareWork = function (seeds) {
     }.bind(this));
 
   return work;
+
 };
 
 
@@ -220,17 +242,22 @@ Seed.prototype.load = function (done) {
         environment: config.environment,
         data: results
       });
+
     });
+
   }
+
   //nothing to perform back-off
   else {
     done();
   }
+
 };
 
 
 //exports
 module.exports = function (options) {
+
   //ensure singleton
   if (!Seed.singleton) {
     Seed.singleton = new Seed(options);
@@ -238,8 +265,9 @@ module.exports = function (options) {
 
   //extend options otherwise
   if (options && _.isPlainObject(options)) {
-    Seed.singleton.options = _.merge(Seed.singleton.options, options);
+    Seed.singleton.options = _.merge({}, Seed.singleton.options, options);
   }
 
   return Seed.singleton;
+
 };
