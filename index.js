@@ -39,7 +39,7 @@ function Seed(options) {
     suffix: 'Seed',
 
     //logger to log seeding progress
-    logger: console,
+    logger: null,
 
     //detect seeding environment
     //default to development environment
@@ -49,13 +49,6 @@ function Seed(options) {
 
   //extend default options
   this.options = _.merge({}, this.options, options);
-
-  //normalize logger
-  this.options.logger.debug = this.options.logger.debug ||
-    (this.options.logger.log || this.options.logger.info);
-
-  this.options.logger.error = this.options.logger.error ||
-    (this.options.logger.log || this.options.logger.info);
 
   //reference mongoose connection
   var connection = mongoose.connection;
@@ -329,7 +322,7 @@ Seed.prototype.prepare = function (work, model, seedData) {
       //
       //TODO should we throw?
       if (error) {
-        logger.error(error);
+        logger && (logger.error || logger.log)(error);
       }
 
       //invoke prepare with data
@@ -407,10 +400,11 @@ Seed.prototype.load = function (done) {
     path.join(config.cwd, config.path, config.environment);
 
   //log seed environment
-  logger.debug('start seeding %s data', config.environment);
+  logger &&
+    (logger.debug || logger.log)('start seeding %s data', config.environment);
 
   //log seed location
-  logger.debug('seeding from %s', seedsPath);
+  logger && (logger.debug || logger.log)('seeding from %s', seedsPath);
 
   //load all seeds available
   //in   `seedsPath`
@@ -430,7 +424,9 @@ Seed.prototype.load = function (done) {
     async.parallel(work, function (error, results) {
 
       //signal seeding complete
-      logger.debug('complete seeding %s data', config.environment);
+      logger &&
+        (logger.debug || logger.log)('complete seeding %s data',
+          config.environment);
 
       done(error, {
         environment: config.environment,

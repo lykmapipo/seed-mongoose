@@ -15,7 +15,7 @@ describe('seed', function () {
 
   //setup test environment
   before(function () {
-    $$seed = seed();
+    $$seed = seed({ logger: console });
     mongoose.connect('mongodb://localhost/seed-mongoose');
   });
 
@@ -25,7 +25,7 @@ describe('seed', function () {
   });
 
   it('should have default configuration value', function (done) {
-    var $seed = seed();
+    var $seed = seed({ logger: console });
 
     expect($seed.options).to.exist;
     expect($seed.options.active).to.be.true;
@@ -53,6 +53,7 @@ describe('seed', function () {
 
   it('should be able to extend options', function (done) {
     var $seed = seed({
+      logger: console,
       cwd: 'data',
       path: 'fixtures',
       environment: 'development',
@@ -72,7 +73,7 @@ describe('seed', function () {
   it(
     'should be able to prepare work(s) to be performed from `array` seeds type',
     function (done) {
-      var $seed = seed();
+      var $seed = seed({ logger: console });
 
       var seeds = {
         UserSeed: [{
@@ -112,7 +113,7 @@ describe('seed', function () {
   it(
     'should be able to prepare work to be performed from `object` seed type',
     function (done) {
-      var $seed = seed();
+      var $seed = seed({ logger: console });
 
       var seeds = {
         UserSeed: {
@@ -148,7 +149,7 @@ describe('seed', function () {
   it(
     'should be able to prepare work(s) to be performed from `function` seeds type',
     function (done) {
-      var $seed = seed();
+      var $seed = seed({ logger: console });
 
       var seeds = {
         UserSeed: function (done) {
@@ -192,6 +193,7 @@ describe('seed', function () {
   it('should be able to load test environment specific seeds', function (
     done) {
     var $seed = seed({
+      logger: console,
       cwd: process.cwd(),
       path: 'seeds',
       environment: 'test',
@@ -212,6 +214,7 @@ describe('seed', function () {
   it('should be able to load development environment specific seeds',
     function (done) {
       var $seed = seed({
+        logger: console,
         cwd: process.cwd(),
         path: 'seeds',
         environment: 'development',
@@ -231,6 +234,7 @@ describe('seed', function () {
   it('should be able to load production environment specific seeds',
     function (done) {
       var $seed = seed({
+        logger: console,
         cwd: process.cwd(),
         path: 'seeds',
         environment: 'production',
@@ -249,6 +253,7 @@ describe('seed', function () {
 
   it('should be able to load seeds from custom path', function (done) {
     var $seed = seed({
+      logger: console,
       cwd: process.cwd(),
       path: 'fixtures',
       environment: 'test',
@@ -266,6 +271,7 @@ describe('seed', function () {
 
   it('should be able to load seeds with custom suffix', function (done) {
     var $seed = seed({
+      logger: console,
       cwd: process.cwd(),
       path: 'seeds',
       suffix: '_seed',
