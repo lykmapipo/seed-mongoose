@@ -9,6 +9,11 @@ var inflection = require('inflection');
 var mongoose = require('mongoose');
 
 
+//TODO handle deep nested relations(follow relation)
+//TODO 1 level deep only
+//TODO remove refs before seed to remove schema cast error
+
+
 /**
  * @function
  * @description DRY data seeding for mongoose.
@@ -153,6 +158,9 @@ Seed.prototype.seed = function (model, data, done) {
     //obtain value from updates
     var value = _.get(data, preSave.path);
 
+    //remove path data to fix cast errors
+    data = _.omit(data, preSave.path);
+
     //check if its allowed value to be persisted
     var isAllowedValue = value && _.isPlainObject(value);
 
@@ -237,7 +245,6 @@ Seed.prototype.seed = function (model, data, done) {
     function save(results, next) {
       //ensure conditions and updates
       results = _.mapValues(results, '_id');
-      data = _.merge({}, data, results);
       data = _.merge({}, data, results);
 
       model.findOneAndUpdate(data, data, {
@@ -424,6 +431,7 @@ Seed.prototype.load = function (done) {
 
       //signal seeding complete
       logger.debug('complete seeding %s data', config.environment);
+
       done(error, {
         environment: config.environment,
         data: results
