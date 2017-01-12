@@ -56,7 +56,7 @@ function Seed(options) {
   //on mongoose connecting
   //load seeds if seeding is enabled
   if (connection && this.options.active) {
-    connection.on('connecting', function () {
+    connection.on('connected', function () {
       this.load(function (error, result) {
         if (error) {
           //notify seeding error
