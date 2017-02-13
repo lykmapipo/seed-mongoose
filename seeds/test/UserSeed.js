@@ -36,9 +36,12 @@ module.exports = function (done) {
       email: faker.internet.email()
     }]
 
+  }, { //test prevent seed object of same hash multiple times
+    username: 'gi chan',
+    email: 'gichan@seedmongoose.dt',
   }, {
-    username: faker.internet.userName(),
-    email: faker.internet.email(),
+    username: 'gi chan',
+    email: 'gichan@seedmongoose.dt',
   }];
 
   done(null, data);

@@ -12,6 +12,7 @@ var mongoose = require('mongoose');
 
 //TODO handle deep nested relations(follow relation)
 //TODO 1 level deep only
+//TODO seed after indexing are done
 //TODO remove refs before seed to remove schema cast error
 
 
@@ -302,20 +303,30 @@ Seed.prototype.seed = function (model, data, done) {
  *
  * @private
  */
-Seed.prototype.prepare = function (work, model, seedData) {
+Seed.prototype.prepare = function (work, model, seedData, worked) {
   //reference configurations
   var logger = this.options.logger;
 
   //is data just a plain object
   if (_.isPlainObject(seedData)) {
 
+    //store hash of object to seed
+    //to prevent seeding same data object
+    //TODO prevent ObjectId
+    var workHash = hash(seedData);
+    var isWorked = _.indexOf(worked, workHash) > -1;
+
     //push work to be done
-    work.push(function (next) {
+    if (!isWorked) {
+      worked.push(workHash);
 
-      //create seed function
-      this.seed(model, seedData, next);
+      work.push(function (next) {
 
-    }.bind(this));
+        //create seed function
+        this.seed(model, seedData, next);
+
+      }.bind(this));
+    }
 
   }
 
@@ -324,13 +335,8 @@ Seed.prototype.prepare = function (work, model, seedData) {
 
     _.forEach(seedData, function (data) {
 
-      //push work to be done
-      work.push(function (next) {
-
-        //create seed function
-        this.seed(model, data, next);
-
-      }.bind(this));
+      //create seed function
+      this.prepare(work, model, data, worked);
 
     }.bind(this));
 
@@ -353,7 +359,7 @@ Seed.prototype.prepare = function (work, model, seedData) {
         //TODO push fn or seed obj & array
 
         //this refer to seed instance context
-        this.prepare(work, model, data);
+        this.prepare(work, model, data, worked);
       }
 
     }.bind(this));
@@ -377,6 +383,7 @@ Seed.prototype.prepareWork = function (seeds) {
   //in parallel during
   //data seeding
   var work = [];
+  var worked = [];
 
   //prepare all seeds
   //data for parallel execution
@@ -397,7 +404,7 @@ Seed.prototype.prepareWork = function (seeds) {
       var seedData = seeds[seed];
 
       //prepare work from seed data
-      this.prepare(work, Model, seedData);
+      this.prepare(work, Model, seedData, worked);
 
     }.bind(this));
 
