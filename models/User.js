@@ -12,6 +12,12 @@ var UserSchema = new Schema({
     cascade: true
   },
 
+  guardian: {
+    type: ObjectId,
+    ref: 'User',
+    cascade: true
+  },
+
   username: {
     type: String
   },

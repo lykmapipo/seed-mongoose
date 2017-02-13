@@ -8,9 +8,15 @@ module.exports = function (done) {
 
   var data = [{
     parent: {
-      username: faker.internet.userName(),
-      email: faker.internet.email()
+      username: 'Good Joe',
+      email: 'goodjoe@seedmongoose.dt'
     },
+
+    guardian: { //to test parent & gurdian only seed once
+      username: 'Good Joe',
+      email: 'goodjoe@seedmongoose.dt'
+    },
+
     username: faker.internet.userName(),
     email: faker.internet.email(),
 

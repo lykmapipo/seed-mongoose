@@ -6,6 +6,7 @@ var path = require('path');
 var _ = require('lodash');
 var async = require('async');
 var inflection = require('inflection');
+var hash = require('object-hash');
 var mongoose = require('mongoose');
 
 
@@ -143,7 +144,10 @@ Seed.prototype.seed = function (model, data, done) {
   //prepare pre saved relations
   var preSaves = {};
 
-  cascades.preSave.map(function (preSave) {
+  //prevent save the same object twice
+  var preSavesHash = [];
+
+  cascades.preSave.forEach(function (preSave) {
 
     //obtain related model
     var Relation = mongoose.model(preSave.ref);
@@ -161,18 +165,32 @@ Seed.prototype.seed = function (model, data, done) {
     //before saving
     if (Relation && isAllowedValue) {
 
-      preSaves[preSave.path] = function (next) {
+      //update preSavesHash
+      var preSaveDataHash = hash(value);
+      var preSaveHash = _.find(preSavesHash, { hash: preSaveDataHash });
+      if (preSaveHash) {
+        preSaveDataHash = preSaveHash.hash;
+      }
+      preSavesHash.push({ path: preSave.path, hash: preSaveDataHash });
 
-        //upsert relations
-        Relation.findOneAndUpdate(value, value, {
-          new: true,
-          upsert: true,
-          runValidators: true,
-          setDefaultsOnInsert: true
-        }, next);
+      //check if presave exists to prevent double seeding
+      //ref of same data
+      var preSaved = _.has(preSaves, preSaveDataHash);
 
-      };
+      //save if no previous pre save exists
+      if (!preSaved) {
+        preSaves[preSaveDataHash] = function (next) {
 
+          //upsert relations
+          Relation.findOneAndUpdate(value, value, {
+            new: true,
+            upsert: true,
+            runValidators: true,
+            setDefaultsOnInsert: true
+          }, next);
+
+        };
+      }
     }
 
   });
@@ -180,7 +198,7 @@ Seed.prototype.seed = function (model, data, done) {
   //prepare post saves
   var postSaves = {};
 
-  cascades.postSave.map(function (postSave) {
+  cascades.postSave.forEach(function (postSave) {
 
     //obtain related model
     var Relation = mongoose.model(postSave.ref);
@@ -237,8 +255,13 @@ Seed.prototype.seed = function (model, data, done) {
 
     function save(results, next) {
       //ensure conditions and updates
-      results = _.mapValues(results, '_id');
-      data = _.merge({}, data, results);
+      _.forEach(preSavesHash, function (preSaveHash) {
+        // update pre save refs
+        var ref = results[preSaveHash.hash];
+        if (ref) {
+          data[preSaveHash.path] = ref._id;
+        }
+      });
 
       model.findOneAndUpdate(data, data, {
         new: true,
