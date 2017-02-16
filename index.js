@@ -7,13 +7,13 @@ var _ = require('lodash');
 var async = require('async');
 var inflection = require('inflection');
 var hash = require('object-hash');
-var mongoose = require('mongoose');
+var mongoose; //use in app provided mongoose due to connection inconsistency
 
 
 //TODO handle deep nested relations(follow relation)
 //TODO 1 level deep only
-//TODO seed after indexing are done
 //TODO remove refs before seed to remove schema cast error
+//TODO clear unused resources after seeding to free memory
 
 
 /**
@@ -22,7 +22,7 @@ var mongoose = require('mongoose');
  * 
  * @param  {Object} options seed configurations
  */
-function Seed(options) {
+function Seed(options, done) {
 
   //defaults configurations
   this.options = {
@@ -45,7 +45,10 @@ function Seed(options) {
 
     //detect seeding environment
     //default to development environment
-    environment: _.get(process.env, 'NODE_ENV', 'development')
+    environment: _.get(process.env, 'NODE_ENV', 'development'),
+
+    //order at which model are seeded
+    order: undefined
 
   };
 
@@ -53,24 +56,91 @@ function Seed(options) {
   this.options = _.merge({}, this.options, options);
 
   //reference mongoose connection
-  var connection = mongoose.connection;
+  // var connection = mongoose.connection;
 
   //on mongoose connecting
   //load seeds if seeding is enabled
-  if (connection && this.options.active) {
-    connection.on('connected', function () {
-      this.load(function (error, result) {
-        if (error) {
-          //notify seeding error
-          connection.emit('seeding error', error);
-        } else {
-          //notify seeding succeed
-          connection.emit('seeding succeed', result);
-        }
-      });
-    }.bind(this));
-  }
+  // if (connection && this.options.active) {
+  this.ensureIndexes(function (error /*, indexedModels*/ ) {
+    if (error) {
+      done(error);
+    } else {
+      this.load(done);
+    }
+  }.bind(this));
+
+  // connection.on('error', function (error) {
+  //   if (_.isFuction(this.options.done)) {
+  //     this.optios.done(error);
+  //   }
+  // });
+
+  // connection.on('connecting', function () {
+  //   console.log('connecting');
+  // });
+
+  // connection.on('connected', function () {
+  //   console.log('connected');
+  // this.load(function (error, result) {
+  //   console.log(error);
+  //   console.log(result);
+  //   if (error) {
+  //     //notify seeding error
+  //     connection.emit('seeding error', error);
+  //   } else {
+  //     //notify seeding succeed
+  //     connection.emit('seeding succeed', result);
+  //   }
+  // });
+  // }.bind(this));
+  // }
 }
+
+
+/**
+ * @name ensureIndexes
+ * @param  {Function} done a callback to invoke once all model are fully 
+ *                         indexed or when error occur during indexing
+ *
+ * @private
+ * @since 0.4.1
+ * @version 0.4.2
+ * @type {Function}
+ */
+Seed.prototype.ensureIndexes = function (done) {
+  //collect indexed models
+  var indexed = [];
+
+  //collect all mongoose models name
+  var modelNames = _.compact(mongoose.modelNames());
+
+  //listen for model indexing event
+  modelNames.forEach(function (modelName) {
+    //obtain mongoose model
+    var Model = mongoose.model(modelName);
+
+    if (Model) {
+      Model.on('index', function (error) {
+        //back off if there is indexing error
+        if (error) {
+          done(error);
+        }
+
+        //check if all models has been indexed
+        else {
+          indexed = _.compact([].concat(indexed).concat(modelName));
+          var isIndexingDone = _.isEmpty(_.xor(indexed, modelNames));
+          if (isIndexingDone) {
+            done(null, indexed);
+          }
+        }
+
+      });
+    }
+
+  });
+
+};
 
 
 /**
@@ -385,8 +455,12 @@ Seed.prototype.prepareWork = function (seeds) {
   var work = [];
   var worked = [];
 
-  //prepare all seeds
-  //data for parallel execution
+  //map with model name as a key
+  //and seed as a value
+  //to help in ordering seeding behavior
+  var modelSeedMap = {};
+
+  //create model name - seed map
   _.keys(seeds)
     .forEach(function (seed) {
       // deduce model name
@@ -396,17 +470,30 @@ Seed.prototype.prepareWork = function (seeds) {
       //pluralize model global id if enable
       modelName = inflection.classify(modelName);
 
-      //grab mongoose model from its name
-      var Model = mongoose.model(modelName);
-
       //grab data to load
       //from the seed data attribute
-      var seedData = seeds[seed];
-
-      //prepare work from seed data
-      this.prepare(work, Model, seedData, worked);
+      modelSeedMap[modelName] = seeds[seed];
 
     }.bind(this));
+
+  //obtain seeding order
+  var modelNames = this.options.order || _.keys(modelSeedMap);
+
+  //prepare all seeds
+  //data for parallel execution
+  _.forEach(modelNames, function (modelName) {
+
+    //grab mongoose model from its name
+    var Model = mongoose.model(modelName);
+
+    //grab data to load
+    //from the seed data attribute
+    var seedData = modelSeedMap[modelName];
+
+    //prepare work from seed data
+    this.prepare(work, Model, seedData, worked);
+
+  }.bind(this));
 
   return work;
 
@@ -420,6 +507,7 @@ Seed.prototype.prepareWork = function (seeds) {
  * @private
  */
 Seed.prototype.load = function (done) {
+
   //reference logger
   var config = this.options;
   var logger = config.logger;
@@ -446,6 +534,7 @@ Seed.prototype.load = function (done) {
 
   //prepare seeding work to perfom
   var work = this.prepareWork(seeds);
+  work = _.compact(work);
 
   //if there is a work to perform
   if (_.size(work) > 0) {
@@ -460,7 +549,7 @@ Seed.prototype.load = function (done) {
 
       done(error, {
         environment: config.environment,
-        data: results
+        data: _.compact(results)
       });
 
     });
@@ -476,11 +565,14 @@ Seed.prototype.load = function (done) {
 
 
 //exports
-module.exports = function (options) {
+module.exports = function (options, _mongoose, done) {
+  if (_mongoose) {
+    mongoose = _mongoose;
+  }
 
   //ensure singleton
   if (!Seed.singleton) {
-    Seed.singleton = new Seed(options);
+    Seed.singleton = new Seed(options, done);
   }
 
   //extend options otherwise
