@@ -26,8 +26,8 @@ describe('schema graph', function () {
     mongoose.model('Flat', FlatSchema);
     const graph = mongoose.schemaGraph();
 
-    expect(graph).to.be.an('object');
-    expect(_.keys(graph)).to.include('Flat');
+    expect(graph).to.be.an('array');
+    expect(graph[0].modelName).to.include('Flat');
 
   });
 
@@ -63,10 +63,12 @@ describe('schema graph', function () {
 
         const graph = mongoose.schemaGraph();
 
-        expect(graph).to.be.an('object');
-        expect(_.keys(graph)).to.include('SelfFlat');
-        expect(graph.SelfFlat.selfParentRefs).to.include('parent');
-        expect(graph.SelfFlat.selfParentRefs).to.not.include('wrong');
+        expect(graph).to.be.an('array');
+        expect(_.map(graph, 'modelName')).to.include('SelfFlat');
+
+        const selfFlat = _.find(graph, { modelName: 'SelfFlat' });
+        expect(selfFlat.selfParentRefs).to.include('parent');
+        expect(selfFlat.selfParentRefs).to.not.include('wrong');
 
       });
 
@@ -75,9 +77,11 @@ describe('schema graph', function () {
 
         const graph = mongoose.schemaGraph();
 
-        expect(graph).to.be.an('object');
-        expect(_.keys(graph)).to.include('SelfFlat');
-        expect(graph.SelfFlat.selfChildRefs)
+        expect(graph).to.be.an('array');
+        expect(_.map(graph, 'modelName')).to.include('SelfFlat');
+
+        const selfFlat = _.find(graph, { modelName: 'SelfFlat' });
+        expect(selfFlat.selfChildRefs)
           .to.include.members(['kids', 'childrens']);
 
       });
@@ -103,16 +107,17 @@ describe('schema graph', function () {
     it('should be able to build graph from direct ref', function () {
       const graph = mongoose.schemaGraph();
 
-      expect(graph).to.be.an('object');
-      expect(_.keys(graph)).to.include('Ref');
+      expect(graph).to.be.an('array');
+      expect(_.map(graph, 'modelName')).to.include('Ref');
 
-      expect(graph.Ref.parentRefs).to.have.length(1);
-      expect(graph.Ref.parentRefs[0].path).be.equal('parent');
-      expect(graph.Ref.parentRefs[0].modelName).be.equal('Flat');
+      const ref = _.find(graph, { modelName: 'Ref' });
+      expect(ref.parentRefs).to.have.length(1);
+      expect(ref.parentRefs[0].path).be.equal('parent');
+      expect(ref.parentRefs[0].modelName).be.equal('Flat');
 
-      expect(graph.Ref.childRefs).to.have.length(1);
-      expect(graph.Ref.childRefs[0].path).be.equal('kids');
-      expect(graph.Ref.childRefs[0].modelName).be.equal('SelfFlat');
+      expect(ref.childRefs).to.have.length(1);
+      expect(ref.childRefs[0].path).be.equal('kids');
+      expect(ref.childRefs[0].modelName).be.equal('SelfFlat');
 
     });
 
