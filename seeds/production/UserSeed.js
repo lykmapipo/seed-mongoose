@@ -1,6 +1,6 @@
 'use strict';
 
-var faker = require('faker');
+const faker = require('faker');
 
 //array of data to seed
 //it may also be an object

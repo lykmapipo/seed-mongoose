@@ -1,12 +1,12 @@
 'use strict';
 
-var faker = require('faker');
+const faker = require('faker');
 
 //function to be evaluated to obtain data
 //it may also be an object or array
 module.exports = function (done) {
 
-  var data = [{
+  const data = [{
     parent: {
       username: 'Good Joe',
       email: 'goodjoe@seedmongoose.dt'

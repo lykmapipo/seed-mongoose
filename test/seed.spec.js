@@ -1,293 +1,378 @@
 'use strict';
 
 //dependencies
-var path = require('path');
-var mongoose = require('mongoose');
-var expect = require('chai').expect;
-var seed = require(path.join(__dirname, '..'));
-var faker = require('faker');
-var User = require(path.join(__dirname, '..', 'models', 'User'));
-
-//trace seeding intergration with mongoose
-var $$seed;
+const path = require('path');
+const _ = require('lodash');
+const async = require('async');
+const hashObject = require('object-hash');
+const expect = require('chai').expect;
+const faker = require('faker');
+const mongoose = require('mongoose');
+const Schema = mongoose.Schema;
+const ObjectId = Schema.ObjectId;
+const seed = require(path.join(__dirname, '..', 'lib', 'seed'));
+let Simple;
+let SimpleRef;
+let OtherRef;
 
 describe('seed', function () {
 
-  //setup test environment
   before(function () {
-    $$seed = seed({ logger: console });
-    mongoose.connect('mongodb://localhost/seed-mongoose');
+    const SimpleSchema = new Schema({
+      first: { type: String, unique: true }
+    });
+    Simple = mongoose.model('Simple', SimpleSchema);
   });
 
-  it('should be a functional module', function (done) {
-    expect(seed).to.be.a('function');
-    done();
+  before(function () {
+    const SimpleRefSchema = new Schema({
+      start: { type: ObjectId, ref: 'SimpleRef' },
+      last: { type: ObjectId, ref: 'SimpleRef' },
+      first: { type: String },
+      kids: [{ type: ObjectId, ref: 'SimpleRef' }]
+    });
+    SimpleRef = mongoose.model('SimpleRef', SimpleRefSchema);
   });
 
-  it('should have default configuration value', function (done) {
-    var $seed = seed({ logger: console });
-
-    expect($seed.options).to.exist;
-    expect($seed.options.active).to.be.true;
-    expect($seed.options.cwd).to.be.equal(process.cwd());
-    expect($seed.options.path).to.be.equal('seeds');
-    expect($seed.options.environment).to.be.equal('test');
-
-    done();
+  before(function () {
+    const OtherRefSchema = new Schema({
+      start: { type: ObjectId, ref: 'Simple' },
+      last: { type: ObjectId, ref: 'Simple' },
+      first: { type: String },
+      kids: [{ type: ObjectId, ref: 'Simple' }]
+    });
+    OtherRef = mongoose.model('OtherRef', OtherRefSchema);
   });
 
-  it('should load persistent storage with the provided seeds', function (
-    done) {
-    setTimeout(function () {
-      User
-        .count(function (error, count) {
-          if (error) {
-            done(error);
-          } else {
-            expect(count).to.be.above(0);
-            done();
-          }
-        });
-    }, 1000);
+  it('should be an object', function () {
+    expect(seed).to.be.an('object');
+    expect(seed).to.include.keys('seeded', 'single');
+    expect(seed.seeded).to.be.a('object');
+    expect(seed.single).to.be.a('function');
   });
 
-  it('should be able to extend options', function (done) {
-    var $seed = seed({
-      logger: console,
-      cwd: 'data',
-      path: 'fixtures',
-      environment: 'development',
-      active: false
+
+  it('should be able to seed single simple model', function (done) {
+    const data = { first: faker.name.findName() };
+    const hash = hashObject(data);
+    seed.single({
+      modelName: 'Simple',
+      data: data,
+      graph: {}
+    }, function (error, seeded) {
+
+      expect(error).to.not.exist;
+      expect(seeded).to.exist;
+
+      expect(seed.seeded[hash]).to.exist;
+
+      done(error, seeded);
+
     });
 
-    expect($seed.options).to.exist;
-    expect($seed.options.active).to.be.false;
-    expect($seed.options.cwd).to.be.equal('data');
-    expect($seed.options.path).to.be.equal('fixtures');
-    expect($seed.options.environment).to.be.equal('development');
-
-    done();
   });
 
+  it('should not be able to seed single simple model twice', function (done) {
+    const data = { first: faker.name.findName() };
+    const hash = hashObject(data);
 
-  it(
-    'should be able to prepare work(s) to be performed from `array` seeds type',
+    async.series({
+
+      first: function (next) {
+        seed.single({
+          modelName: 'Simple',
+          data: data,
+          graph: {}
+        }, next);
+      },
+
+      repeat: function (next) {
+        seed.single({
+          modelName: 'Simple',
+          data: data,
+          graph: {}
+        }, next);
+      }
+
+    }, function (error, seeded) {
+
+      expect(error).to.not.exist;
+      expect(seeded).to.exist;
+
+      expect(seed.seeded[hash]).to.exist;
+
+      expect(seeded.first._id)
+        .to.eql(seeded.repeat._id);
+
+      done(error, seeded);
+
+    });
+
+  });
+
+  it('should be able to seed multiple simple model', function (done) {
+    const data = { first: faker.name.findName() };
+    const hash = hashObject(data);
+    seed.many({
+      modelName: 'Simple',
+      data: [data],
+      graph: {}
+    }, function (error, seeded) {
+
+      expect(error).to.not.exist;
+      expect(seeded).to.exist;
+
+      expect(seed.seeded[hash]).to.exist;
+
+      done(error, seeded);
+
+    });
+
+  });
+
+  it('should not be able to seed multiple same simple model twice',
     function (done) {
-      var $seed = seed({ logger: console });
+      const data = { first: faker.name.findName() };
+      const hash = hashObject(data);
+      seed.many({
+        modelName: 'Simple',
+        data: [data, data],
+        graph: {}
+      }, function (error, seeded) {
 
-      var seeds = {
-        UserSeed: [{
-          username: faker.internet.userName(),
-          email: faker.internet.email()
-        }, {
-          username: faker.internet.userName(),
-          email: faker.internet.email()
-        }]
-      };
+        expect(error).to.not.exist;
+        expect(seeded).to.exist;
 
-      var works = $seed.prepareWork(seeds);
+        expect(seed.seeded[hash]).to.exist;
 
-      expect(works).to.be.a('array');
-      expect(works.length).to.be.equal(2);
+        expect(_.first(seeded)._id)
+          .to.eql(_.last(seeded)._id);
 
-      var work = works[0];
+        done(error, seeded);
 
-      expect(work).to.be.a('function');
-
-      //note!
-      //since a work its just a wrapper for
-      //Model.findOneAndUpdate
-      //lets be sure its doing
-      //what it supposed to do
-      work(function (error, user) {
-
-        expect(user.id).to.not.be.null;
-        expect(user.username).to.not.be.null;
-        expect(user.email).to.not.be.null;
-
-        done(error, user);
       });
+
     });
 
+  it('should be able to seed self ref model', function (done) {
+    const start = { first: faker.name.findName() };
+    const data = { start: start, first: faker.name.findName() };
+    const startHash = hashObject(start);
 
-  it(
-    'should be able to prepare work to be performed from `object` seed type',
-    function (done) {
-      var $seed = seed({ logger: console });
+    seed.single({
+      modelName: 'SimpleRef',
+      data: data,
+      graph: {}
+    }, function (error, seeded) {
 
-      var seeds = {
-        UserSeed: {
-          username: faker.internet.userName(),
-          email: faker.internet.email()
-        }
-      };
+      expect(error).to.not.exist;
+      expect(seeded).to.exist;
 
-      var works = $seed.prepareWork(seeds);
+      expect(seed.seeded[startHash]).to.exist;
 
-      expect(works).to.be.a('array');
-      expect(works.length).to.be.equal(1);
+      expect(seeded.start).to.exist;
 
-      var work = works[0];
-
-      expect(work).to.be.a('function');
-
-      //note!
-      //since a work its just a wrapper for
-      //Model.findOneAndUpdate
-      //lets be sure its doing
-      //what it supposed to do
-      work(function (error, user) {
-
-        expect(user.id).to.not.be.null;
-        expect(user.username).to.not.be.null;
-        expect(user.email).to.not.be.null;
-
-        done(error, user);
-      });
-    });
-
-  it(
-    'should be able to prepare work(s) to be performed from `function` seeds type',
-    function (done) {
-      var $seed = seed({ logger: console });
-
-      var seeds = {
-        UserSeed: function (done) {
-
-          var data = [{
-            username: faker.internet.userName(),
-            email: faker.internet.email()
-          }, {
-            username: faker.internet.userName(),
-            email: faker.internet.email()
-          }];
-
-          done(null, data);
-        }
-      };
-
-      var works = $seed.prepareWork(seeds);
-
-      expect(works).to.be.a('array');
-      expect(works.length).to.be.equal(2);
-
-      var work = works[0];
-
-      expect(work).to.be.a('function');
-
-      //note!
-      //since a work its just a wrapper for
-      //Model.findOneAndUpdate
-      //lets be sure its doing
-      //what it supposed to do
-      work(function (error, user) {
-
-        expect(user.id).to.not.be.null;
-        expect(user.username).to.not.be.null;
-        expect(user.email).to.not.be.null;
-
-        done(error, user);
-      });
-    });
-
-  it('should be able to load test environment specific seeds', function (
-    done) {
-    var $seed = seed({
-      logger: console,
-      cwd: process.cwd(),
-      path: 'seeds',
-      environment: 'test',
-      active: false
-    });
-
-    $seed.load(function (error, result) {
-
-      expect(result.environment).to.equal('test');
-      expect(result.data).to.not.be.null;
-
-      done(error, result);
+      done(error, seeded);
 
     });
 
   });
 
-  it('should be able to load development environment specific seeds',
-    function (done) {
-      var $seed = seed({
-        logger: console,
-        cwd: process.cwd(),
-        path: 'seeds',
-        environment: 'development',
-        active: false
-      });
+  it('should not be able to seed self ref model twice', function (done) {
+    const start = { first: faker.name.findName() };
+    const last = start;
+    const data = { start: start, last: last, first: faker.name.findName() };
+    const startHash = hashObject(start);
+    const lastHash = hashObject(last);
 
-      $seed.load(function (error, result) {
+    seed.single({
+      modelName: 'SimpleRef',
+      data: data,
+      graph: {}
+    }, function (error, seeded) {
 
-        expect(result.environment).to.equal('development');
-        expect(result.data).to.not.be.null;
+      expect(error).to.not.exist;
+      expect(seeded).to.exist;
 
-        done(error, result);
+      expect(seed.seeded[startHash]).to.exist;
+      expect(seed.seeded[lastHash]).to.exist;
 
-      });
+      expect(seeded.start).to.be.eql(seeded.last);
+
+      done(error, seeded);
+
     });
 
-  it('should be able to load production environment specific seeds',
-    function (done) {
-      var $seed = seed({
-        logger: console,
-        cwd: process.cwd(),
-        path: 'seeds',
-        environment: 'production',
-        active: false
-      });
-
-      $seed.load(function (error, result) {
-
-        expect(result.environment).to.equal('production');
-        expect(result.data).to.not.be.null;
-
-        done(error, result);
-      });
-    });
-
-
-  it('should be able to load seeds from custom path', function (done) {
-    var $seed = seed({
-      logger: console,
-      cwd: process.cwd(),
-      path: 'fixtures',
-      environment: 'test',
-      active: false
-    });
-
-    $seed.load(function (error, result) {
-
-      expect(result.environment).to.equal('test');
-      expect(result.data).to.not.be.null;
-
-      done(error, result);
-    });
   });
 
-  it('should be able to load seeds with custom suffix', function (done) {
-    var $seed = seed({
-      logger: console,
-      cwd: process.cwd(),
-      path: 'seeds',
-      suffix: '_seed',
-      environment: 'development',
-      active: false
+  it('should be able to seed collection of self child ref model',
+    function (done) {
+      const kids = [
+        { first: faker.name.findName() },
+        { first: faker.name.findName() }
+      ];
+      const data = { first: faker.name.findName(), kids: kids };
+
+      seed.single({
+        modelName: 'SimpleRef',
+        data: data,
+        graph: {}
+      }, function (error, seeded) {
+
+        expect(error).to.not.exist;
+        expect(seeded).to.exist;
+
+        expect(seeded.kids).to.exist;
+        expect(seeded.kids).to.have.length(2);
+
+        done(error, seeded);
+
+      });
+
     });
 
-    $seed.load(function (error, result) {
+  it('should not be able to seed collection of self child ref model twice',
+    function (done) {
+      const first = { first: faker.name.findName() };
+      const last = first;
+      const kids = [
+        first,
+        last
+      ];
+      const data = { first: faker.name.findName(), kids: kids };
 
-      expect(result.environment).to.equal('development');
-      expect(result.data).to.not.be.null;
+      seed.single({
+        modelName: 'SimpleRef',
+        data: data,
+        graph: {}
+      }, function (error, seeded) {
 
-      done(error, result);
+        expect(error).to.not.exist;
+        expect(seeded).to.exist;
+
+        expect(seeded.kids).to.exist;
+        expect(seeded.kids).to.have.length(1);
+
+        done(error, seeded);
+
+      });
 
     });
 
+  it('should be able to seed other ref model', function (done) {
+    const start = { first: faker.name.findName() };
+    const data = { start: start, first: faker.name.findName() };
+    const startHash = hashObject(start);
+
+    seed.single({
+      modelName: 'OtherRef',
+      data: data,
+      graph: {}
+    }, function (error, seeded) {
+
+      expect(error).to.not.exist;
+      expect(seeded).to.exist;
+
+      expect(seed.seeded[startHash]).to.exist;
+
+      expect(seeded.start).to.exist;
+
+      done(error, seeded);
+
+    });
+
+  });
+
+  it('should not be able to seed other ref model twice', function (done) {
+    const start = { first: faker.name.findName() };
+    const last = start;
+    const data = { start: start, last: last, first: faker.name.findName() };
+    const startHash = hashObject(start);
+
+    seed.single({
+      modelName: 'OtherRef',
+      data: data,
+      graph: {}
+    }, function (error, seeded) {
+
+      expect(error).to.not.exist;
+      expect(seeded).to.exist;
+
+      expect(seed.seeded[startHash]).to.exist;
+
+      expect(seeded.start).to.exist;
+      expect(seeded.last).to.exist;
+      expect(seeded.start).to.be.eql(seeded.last);
+
+      done(error, seeded);
+
+    });
+
+  });
+
+  it('should be able to seed collection of other ref model',
+    function (done) {
+      const kids = [
+        { first: faker.name.findName() },
+        { first: faker.name.findName() }
+      ];
+      const data = { first: faker.name.findName(), kids: kids };
+
+      seed.single({
+        modelName: 'OtherRef',
+        data: data,
+        graph: {}
+      }, function (error, seeded) {
+
+        expect(error).to.not.exist;
+        expect(seeded).to.exist;
+
+        expect(seeded.kids).to.exist;
+        expect(seeded.kids).to.have.length(2);
+
+        done(error, seeded);
+
+      });
+
+    });
+
+  it('should not be able to seed collection of other ref model twice',
+    function (done) {
+      const first = { first: faker.name.findName() };
+      const kids = [
+        first,
+        first
+      ];
+      const data = { first: faker.name.findName(), kids: kids };
+
+      seed.single({
+        modelName: 'OtherRef',
+        data: data,
+        graph: {}
+      }, function (error, seeded) {
+
+        expect(error).to.not.exist;
+        expect(seeded).to.exist;
+
+        expect(seeded.kids).to.exist;
+        expect(seeded.kids).to.have.length(1);
+
+        done(error, seeded);
+
+      });
+
+    });
+
+  afterEach(function (done) {
+    Simple.remove(done);
+  });
+
+  afterEach(function (done) {
+    SimpleRef.remove(done);
+  });
+
+  afterEach(function (done) {
+    OtherRef.remove(done);
   });
 
 });

@@ -2,18 +2,129 @@
 
 
 //dependencies
-var path = require('path');
-var _ = require('lodash');
-var async = require('async');
-var inflection = require('inflection');
-var hash = require('object-hash');
-var mongoose; //use in app provided mongoose due to connection inconsistency
-
+const path = require('path');
+const _ = require('lodash');
+const async = require('async');
+const inflection = require('inflection');
+const seed = require(path.join(__dirname, 'lib', 'seed'));
 
 //TODO handle deep nested relations(follow relation)
 //TODO 1 level deep only
-//TODO remove refs before seed to remove schema cast error
-//TODO clear unused resources after seeding to free memory
+
+
+/**
+ * @name loadSeeds
+ * @description loading seed's data into configured model persistent storage
+ * @private
+ * @type {Function}
+ */
+function loadSeeds(options) {
+  //obtain logger
+  const logger = options.logger;
+
+  //deduce seeds path to use
+  //based on current environment
+  const seedsPath =
+    path.join(options.cwd, options.path, options.environment);
+
+  //log seed environment
+  logger &&
+    (logger.debug || logger.log)('start seeding %s data', options.environment);
+
+  //log seed location
+  logger && (logger.debug || logger.log)('seeding from %s', seedsPath);
+
+  //load all seeds available
+  //in   `seedsPath`
+  const seeds = require('require-all')({
+    dirname: seedsPath,
+    filter: new RegExp('(.+' + options.suffix + ')\.js$'),
+    excludeDirs: /^\.(git|svn)$/
+  });
+
+  //map with model name as a key
+  //and seed as a value
+  //to help in ordering seeding behavior
+  let modelSeedMap = {};
+
+  //create model name - seed map
+  _.keys(seeds)
+    .forEach(function (seed) {
+      // deduce model name
+      let modelName =
+        seed.replace(new RegExp(options.suffix + '$'), '');
+
+      //pluralize model global id if enable
+      modelName = inflection.classify(modelName);
+
+      //grab data to load
+      //from the seed data attribute
+      modelSeedMap[modelName] = seeds[seed];
+
+    });
+
+  return modelSeedMap;
+
+}
+
+
+function load(options, done) {
+  //require mongoose
+  const mongoose = require('mongoose');
+
+  //load seeds
+  const seeds = loadSeeds(options);
+
+  //obtain model graph
+  const graph = mongoose.schemaGraph();
+
+  //obtain models
+  const modelNames = _.map(graph, 'modelName');
+
+  //prepare works
+  let works = [];
+  _.forEach(modelNames, function (modelName) {
+    //get seed data
+    let data = seeds[modelName];
+
+    if (data) {
+
+      works.push(function (next) {
+        async.waterfall([
+          function fetchSeedData(then) {
+            if (_.isFunction(data)) {
+              data(then);
+            } else {
+              then(null, data);
+            }
+          },
+          function normalizeSeedData(data, then) {
+            data = [].concat(data);
+            _.compact(data);
+            then(null, data);
+          },
+          function seedData(data, then) {
+            seed.many({
+              modelName: modelName,
+              data: data
+            }, then);
+          }
+        ], next);
+
+      });
+
+    }
+
+  });
+
+  _.compact(works);
+  async.series(works, function (error, seeds) {
+    // clear seeded cache
+    seed.seeded = {};
+    done(error, seeds);
+  });
+
+}
 
 
 /**
@@ -22,10 +133,16 @@ var mongoose; //use in app provided mongoose due to connection inconsistency
  * 
  * @param  {Object} options seed configurations
  */
-function Seed(options, done) {
+exports = module.exports = function (options, done) {
+
+  //normalize options
+  if (_.isFunction(options)) {
+    done = options;
+    options = {};
+  }
 
   //defaults configurations
-  this.options = {
+  options = _.merge({}, {
     //set seeding to be active by default
     active: true,
 
@@ -45,541 +162,10 @@ function Seed(options, done) {
 
     //detect seeding environment
     //default to development environment
-    environment: _.get(process.env, 'NODE_ENV', 'development'),
+    environment: _.get(process.env, 'NODE_ENV', 'development')
 
-    //order at which model are seeded
-    order: undefined
+  }, options);
 
-  };
-
-  //extend default options
-  this.options = _.merge({}, this.options, options);
-
-  //reference mongoose connection
-  // var connection = mongoose.connection;
-
-  //on mongoose connecting
-  //load seeds if seeding is enabled
-  // if (connection && this.options.active) {
-  this.ensureIndexes(function (error /*, indexedModels*/ ) {
-    if (error) {
-      done(error);
-    } else {
-      this.load(done);
-    }
-  }.bind(this));
-
-  // connection.on('error', function (error) {
-  //   if (_.isFuction(this.options.done)) {
-  //     this.optios.done(error);
-  //   }
-  // });
-
-  // connection.on('connecting', function () {
-  //   console.log('connecting');
-  // });
-
-  // connection.on('connected', function () {
-  //   console.log('connected');
-  // this.load(function (error, result) {
-  //   console.log(error);
-  //   console.log(result);
-  //   if (error) {
-  //     //notify seeding error
-  //     connection.emit('seeding error', error);
-  //   } else {
-  //     //notify seeding succeed
-  //     connection.emit('seeding succeed', result);
-  //   }
-  // });
-  // }.bind(this));
-  // }
-}
-
-
-/**
- * @name ensureIndexes
- * @param  {Function} done a callback to invoke once all model are fully 
- *                         indexed or when error occur during indexing
- *
- * @private
- * @since 0.4.1
- * @version 0.4.2
- * @type {Function}
- */
-Seed.prototype.ensureIndexes = function (done) {
-  //collect indexed models
-  var indexed = [];
-
-  //collect all mongoose models name
-  var modelNames = _.compact(mongoose.modelNames());
-
-  //listen for model indexing event
-  modelNames.forEach(function (modelName) {
-    //obtain mongoose model
-    var Model = mongoose.model(modelName);
-
-    if (Model) {
-      Model.on('index', function (error) {
-        //back off if there is indexing error
-        if (error) {
-          done(error);
-        }
-
-        //check if all models has been indexed
-        else {
-          indexed = _.compact([].concat(indexed).concat(modelName));
-          var isIndexingDone = _.isEmpty(_.xor(indexed, modelNames));
-          if (isIndexingDone) {
-            done(null, indexed);
-          }
-        }
-
-      });
-    }
-
-  });
-
-};
-
-
-/**
- * @description prepare relation to be pre save and post saved for a given
- *              model
- * @param  {Model} model valid mongoose model under seed
- * @return {Object}        preSave-d and postSave-d metadata
- * @private
- */
-Seed.prototype.cascade = function (model) {
-
-  //prepare cascades options
-  var cascades = {
-    preSave: [],
-    postSave: []
-  };
-
-  model.schema.eachPath(function (path, schemaType) {
-
-    //handle single ref for pre save
-    var isObjectId = schemaType && schemaType.instance &&
-      schemaType.instance === 'ObjectID';
-
-    var hasRef = schemaType.instance && schemaType.options &&
-      schemaType.options.ref;
-
-    if (isObjectId && hasRef) {
-      cascades.preSave.push({
-        ref: schemaType.options.ref,
-        path: path
-      });
-    }
-
-
-    //handle array of ref for post save
-    var isObjectIdArray = schemaType && schemaType.instance &&
-      schemaType.instance === 'Array' && schemaType.caster &&
-      schemaType.caster.instance === 'ObjectID';
-
-    hasRef = schemaType.instance && schemaType.options &&
-      (schemaType.options.ref || _.get(schemaType, 'caster.options.ref'));
-
-    if (isObjectIdArray && hasRef) {
-      cascades.postSave.push({
-        ref: schemaType.options.ref || _.get(schemaType,
-          'caster.options.ref'),
-        path: path
-      });
-    }
-
-  });
-
-  return cascades;
-
-};
-
-
-/**
- * @description seed a particular model with provided data. In case of related 
- *              model try to pre save and post save them.
- * @param  {Model}   model current model under seed
- * @param  {Object}   data  model data to be seed-ed
- * @param  {Function} done  a callback to invoke on success or failure
- * @return {Object}
- * @private
- */
-Seed.prototype.seed = function (model, data, done) {
-
-  //obtain cascades options
-  var cascades = this.cascade(model);
-
-  //prepare pre saved relations
-  var preSaves = {};
-
-  //prevent save the same object twice
-  var preSavesHash = [];
-
-  cascades.preSave.forEach(function (preSave) {
-
-    //obtain related model
-    var Relation = mongoose.model(preSave.ref);
-
-    //obtain value from updates
-    var value = _.get(data, preSave.path);
-
-    //remove path data to fix cast errors
-    data = _.omit(data, preSave.path);
-
-    //check if its allowed value to be persisted
-    var isAllowedValue = value && _.isPlainObject(value);
-
-    //push into stack relations to be created
-    //before saving
-    if (Relation && isAllowedValue) {
-
-      //update preSavesHash
-      var preSaveDataHash = hash(value);
-      var preSaveHash = _.find(preSavesHash, { hash: preSaveDataHash });
-      if (preSaveHash) {
-        preSaveDataHash = preSaveHash.hash;
-      }
-      preSavesHash.push({ path: preSave.path, hash: preSaveDataHash });
-
-      //check if presave exists to prevent double seeding
-      //ref of same data
-      var preSaved = _.has(preSaves, preSaveDataHash);
-
-      //save if no previous pre save exists
-      if (!preSaved) {
-        preSaves[preSaveDataHash] = function (next) {
-
-          //upsert relations
-          Relation.findOneAndUpdate(value, value, {
-            new: true,
-            upsert: true,
-            runValidators: true,
-            setDefaultsOnInsert: true
-          }, next);
-
-        };
-      }
-    }
-
-  });
-
-  //prepare post saves
-  var postSaves = {};
-
-  cascades.postSave.forEach(function (postSave) {
-
-    //obtain related model
-    var Relation = mongoose.model(postSave.ref);
-
-    //obtain value from updates
-    var values = _.get(data, postSave.path);
-    values = _.compact([].concat(values));
-
-    //remove path data to fix cast errors
-    data = _.omit(data, postSave.path);
-
-    //check if its allowed value to be persisted
-    var isAllowedValue = values && _.isArray(values);
-
-    //push into stack relations to be created
-    //before saving
-    if (Relation && isAllowedValue) {
-
-      var works = [];
-
-      values.forEach(function (value) {
-
-        works.push(function (next) {
-
-          //upsert relations
-          Relation.findOneAndUpdate(value, value, {
-            new: true,
-            upsert: true,
-            runValidators: true,
-            setDefaultsOnInsert: true
-          }, next);
-
-        });
-
-      });
-
-      postSaves[postSave.path] = function (next) {
-        async.parallel(_.compact(works), next);
-      };
-
-    }
-
-  });
-
-  async.waterfall([
-
-    function preSave(next) {
-      if (_.keys(preSaves).length > 0) {
-        async.parallel(preSaves, next);
-      } else {
-        next(null, {});
-      }
-    },
-
-    function save(results, next) {
-      //ensure conditions and updates
-      _.forEach(preSavesHash, function (preSaveHash) {
-        // update pre save refs
-        var ref = results[preSaveHash.hash];
-        if (ref) {
-          data[preSaveHash.path] = ref._id;
-        }
-      });
-
-      model.findOneAndUpdate(data, data, {
-        new: true,
-        upsert: true,
-        runValidators: true,
-        setDefaultsOnInsert: true
-      }, next);
-
-    },
-
-    function postSave(saved, next) {
-      if (_.keys(postSaves).length > 0) {
-        async.parallel(postSaves, function (error, results) {
-          _.forEach(results, function (value, key) {
-            saved[key] = _.map(value, '_id');
-          });
-          next(error, saved);
-        });
-      } else {
-        next(null, saved);
-      }
-    }
-  ], done);
-
-};
-
-
-/**
- * @description Take seed data and check if it is of array or object type
- *              and prepare work to be performed from it
- * @param  {Array} work     A collection of database queries to be
- *                          performed to seed data into database
- * @param  {Object} model   A valid mongoose model
- * @param  {Object|Array|Function} seedData An array or object contains 
- *                                          data or a function to be evaluated
- *                                          to obtain data to seeded into 
- *                                          database
- *
- * @private
- */
-Seed.prototype.prepare = function (work, model, seedData, worked) {
-  //reference configurations
-  var logger = this.options.logger;
-
-  //is data just a plain object
-  if (_.isPlainObject(seedData)) {
-
-    //store hash of object to seed
-    //to prevent seeding same data object
-    //TODO prevent ObjectId
-    var workHash = hash(seedData);
-    var isWorked = _.indexOf(worked, workHash) > -1;
-
-    //push work to be done
-    if (!isWorked) {
-      worked.push(workHash);
-
-      work.push(function (next) {
-
-        //create seed function
-        this.seed(model, seedData, next);
-
-      }.bind(this));
-    }
-
-  }
-
-  //is array data
-  if (_.isArray(seedData)) {
-
-    _.forEach(seedData, function (data) {
-
-      //create seed function
-      this.prepare(work, model, data, worked);
-
-    }.bind(this));
-
-  }
-
-  //is functional data
-  if (_.isFunction(seedData)) {
-
-    //evaluate function to obtain data
-    seedData(function (error, data) {
-      //current log error and continue
-      //
-      //TODO should we throw?
-      if (error) {
-        logger && (logger.error || logger.log)(error);
-      }
-
-      //invoke prepare with data
-      else {
-        //TODO push fn or seed obj & array
-
-        //this refer to seed instance context
-        this.prepare(work, model, data, worked);
-      }
-
-    }.bind(this));
-
-  }
-
-};
-
-
-/**
- * @function
- * @description prepare work to be performed during seeding the data
- * @param {Object} config seeding configurations
- * @param  {Object} seeds environment specific loaded seeds from the seeds 
- *                        directory
- * @return {Array} a collection of works to be performed during data loading
- * @private
- */
-Seed.prototype.prepareWork = function (seeds) {
-  //work to be done
-  //in parallel during
-  //data seeding
-  var work = [];
-  var worked = [];
-
-  //map with model name as a key
-  //and seed as a value
-  //to help in ordering seeding behavior
-  var modelSeedMap = {};
-
-  //create model name - seed map
-  _.keys(seeds)
-    .forEach(function (seed) {
-      // deduce model name
-      var modelName =
-        seed.replace(new RegExp(this.options.suffix + '$'), '');
-
-      //pluralize model global id if enable
-      modelName = inflection.classify(modelName);
-
-      //grab data to load
-      //from the seed data attribute
-      modelSeedMap[modelName] = seeds[seed];
-
-    }.bind(this));
-
-  //obtain seeding order
-  var modelNames = this.options.order || _.keys(modelSeedMap);
-
-  //prepare all seeds
-  //data for parallel execution
-  _.forEach(modelNames, function (modelName) {
-
-    //grab mongoose model from its name
-    var Model = mongoose.model(modelName);
-
-    //grab data to load
-    //from the seed data attribute
-    var seedData = modelSeedMap[modelName];
-
-    //prepare work from seed data
-    this.prepare(work, Model, seedData, worked);
-
-  }.bind(this));
-
-  return work;
-
-};
-
-
-/**
- * @function
- * @description loading seed's data into configured model persistent storage
- * @param {Function} done  a callback to invoke on after seeding
- * @private
- */
-Seed.prototype.load = function (done) {
-
-  //reference logger
-  var config = this.options;
-  var logger = config.logger;
-
-  //deduce seeds path to use
-  //based on current environment
-  var seedsPath =
-    path.join(config.cwd, config.path, config.environment);
-
-  //log seed environment
-  logger &&
-    (logger.debug || logger.log)('start seeding %s data', config.environment);
-
-  //log seed location
-  logger && (logger.debug || logger.log)('seeding from %s', seedsPath);
-
-  //load all seeds available
-  //in   `seedsPath`
-  var seeds = require('require-all')({
-    dirname: seedsPath,
-    filter: new RegExp('(.+' + config.suffix + ')\.js$'),
-    excludeDirs: /^\.(git|svn)$/
-  });
-
-  //prepare seeding work to perfom
-  var work = this.prepareWork(seeds);
-  work = _.compact(work);
-
-  //if there is a work to perform
-  if (_.size(work) > 0) {
-    //now lets do the work
-    //in parallel fashion
-    async.parallel(work, function (error, results) {
-
-      //signal seeding complete
-      logger &&
-        (logger.debug || logger.log)('complete seeding %s data',
-          config.environment);
-
-      done(error, {
-        environment: config.environment,
-        data: _.compact(results)
-      });
-
-    });
-
-  }
-
-  //nothing to perform back-off
-  else {
-    done();
-  }
-
-};
-
-
-//exports
-module.exports = function (options, _mongoose, done) {
-  if (_mongoose) {
-    mongoose = _mongoose;
-  }
-
-  //ensure singleton
-  if (!Seed.singleton) {
-    Seed.singleton = new Seed(options, done);
-  }
-
-  //extend options otherwise
-  if (options && _.isPlainObject(options)) {
-    Seed.singleton.options = _.merge({}, Seed.singleton.options, options);
-  }
-
-  return Seed.singleton;
+  load(options, done);
 
 };

@@ -7,7 +7,7 @@ const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 const ObjectId = Schema.Types.ObjectId;
 const expect = require('chai').expect;
-require(path.join(__dirname, '..', 'lib', 'schema_graph'))(mongoose);
+require(path.join(__dirname, '..', 'lib', 'schema_graph'));
 
 describe('schema graph', function () {
 
@@ -27,7 +27,10 @@ describe('schema graph', function () {
     const graph = mongoose.schemaGraph();
 
     expect(graph).to.be.an('array');
-    expect(graph[0].modelName).to.include('Flat');
+
+    const graphed = _.find(graph, { modelName: 'Flat' });
+    expect(graphed.modelName).to.include('Flat');
+    expect(graphed.score).to.equal(1000);
 
   });
 

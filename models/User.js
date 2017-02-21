@@ -1,21 +1,20 @@
 'use strict';
 
 //dependencies
-var mongoose = require('mongoose');
-var Schema = mongoose.Schema;
-var ObjectId = Schema.Types.ObjectId;
+const mongoose = require('mongoose');
+const Schema = mongoose.Schema;
+const ObjectId = Schema.Types.ObjectId;
 
-var UserSchema = new Schema({
+const UserSchema = new Schema({
   parent: {
     type: ObjectId,
     ref: 'User',
-    cascade: true
+    index: true
   },
 
   guardian: {
     type: ObjectId,
-    ref: 'User',
-    cascade: true
+    ref: 'User'
   },
 
   username: {
