@@ -7,13 +7,13 @@ const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 const ObjectId = Schema.Types.ObjectId;
 const expect = require('chai').expect;
-require(path.join(__dirname, '..', 'lib', 'schema_graph'));
+const schemaGraph = require(path.join(__dirname, '..', 'lib', 'schema_graph'));
 
 describe('schema graph', function () {
 
   it('should be a function', function () {
-    expect(mongoose.schemaGraph).to.exist;
-    expect(mongoose.schemaGraph).to.be.a('function');
+    expect(schemaGraph).to.exist;
+    expect(schemaGraph).to.be.a('function');
   });
 
   it('should be able to build graph from flat schema', function () {
@@ -24,7 +24,7 @@ describe('schema graph', function () {
       }
     });
     mongoose.model('Flat', FlatSchema);
-    const graph = mongoose.schemaGraph();
+    const graph = schemaGraph(mongoose);
 
     expect(graph).to.be.an('array');
 
@@ -64,7 +64,7 @@ describe('schema graph', function () {
     it('should be able to build graph from parent self ref',
       function () {
 
-        const graph = mongoose.schemaGraph();
+        const graph = schemaGraph(mongoose);
 
         expect(graph).to.be.an('array');
         expect(_.map(graph, 'modelName')).to.include('SelfFlat');
@@ -78,7 +78,7 @@ describe('schema graph', function () {
     it('should be able to build graph from array child self ref',
       function () {
 
-        const graph = mongoose.schemaGraph();
+        const graph = schemaGraph(mongoose);
 
         expect(graph).to.be.an('array');
         expect(_.map(graph, 'modelName')).to.include('SelfFlat');
@@ -108,7 +108,7 @@ describe('schema graph', function () {
     });
 
     it('should be able to build graph from direct ref', function () {
-      const graph = mongoose.schemaGraph();
+      const graph = schemaGraph(mongoose);
 
       expect(graph).to.be.an('array');
       expect(_.map(graph, 'modelName')).to.include('Ref');

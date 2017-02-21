@@ -7,6 +7,9 @@ DRY data seeding for [mongoose](https://github.com/Automattic/mongoose).
 
 Simplify `mongoose` data seeding based on the current running environment of your application. You may use `seed-mongoose` during `test`, `development` and even seed your application with default data during deployment in `production` environment.
 
+## Requirements
+- [NodeJS v6.9.2+](https://nodejs.org)
+
 ## Installation
 ```js
 $ npm install --save seed-mongoose
@@ -20,15 +23,21 @@ $ npm install --save-dev faker
 ## Usage
 ```js
 require('seed-mongoose')();
-var mongoose = require('mongoose');
 
 ...
 
-mongoose.connect('mongodb://localhost/myapp');
+mongoose.connect(uristring, mongoOptions, function () {
+  require('seed-mongoose')({
+    suffix: '_seed',
+    logger: winston,
+    mongoose: mongoose //This is required
+  }, function (error, results) {
+    ...
+  });
+});
 
 ```
 
-*Note!: You must require `seed-mongoose` before mongoose, as it uses mongoose [connection events](http://mongoosejs.com/docs/api.html#connection_Connection) to auto seed data.*
 
 ## How it works
 By default `seed-mongoose` look for environment specific seeds in the `seeds` directory inside `process.cwd()` of your application. Example, if you need to seed your application during `test` you will have to create `seeds/test` and add `model seed files` inside it.
@@ -108,14 +117,17 @@ The same convection must be followed for `development` and `production` environm
 
 Simply, pass the config object into it as below:
 ```js
+var mongoose = require('mongoose');
+
+...
+
 var seed = require('seed-mongoose')({
             cwd: 'data',
             path: 'fixtures',
             logger:console,
             environment: 'development',
-            active: false
+            mongoose: mongoose
         });
-var mongoose = require('mongoose');
 
 ...
 
@@ -126,7 +138,7 @@ var mongoose = require('mongoose');
 - `suffix` suffix to use match seeds when loading seeds from a seed directory. Default to `Seed`
 - `logger` logger to be used to log progress. Default to `console`
 - `environment` seeding environment. Default to `process.env.NODE_ENV`
-- `active` signal whether seeding if enable. Default to `true`
+
 
 ## Testing
 

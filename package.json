@@ -1,6 +1,6 @@
 {
   "name": "seed-mongoose",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "description": "DRY data seeding for mongoose",
   "main": "index.js",
   "scripts": {

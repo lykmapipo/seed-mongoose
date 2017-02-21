@@ -7,6 +7,8 @@ const _ = require('lodash');
 const async = require('async');
 const inflection = require('inflection');
 const seed = require(path.join(__dirname, 'lib', 'seed'));
+const schemaGraph = require(path.join(__dirname, 'lib', 'schema_graph'));
+let mongoose;
 
 //TODO handle deep nested relations(follow relation)
 //TODO 1 level deep only
@@ -69,14 +71,15 @@ function loadSeeds(options) {
 
 
 function load(options, done) {
-  //require mongoose
-  const mongoose = require('mongoose');
+
+  //obtain logger
+  const logger = options.logger;
 
   //load seeds
   const seeds = loadSeeds(options);
 
   //obtain model graph
-  const graph = mongoose.schemaGraph();
+  const graph = schemaGraph(mongoose);
 
   //obtain models
   const modelNames = _.map(graph, 'modelName');
@@ -121,7 +124,16 @@ function load(options, done) {
   async.series(works, function (error, seeds) {
     // clear seeded cache
     seed.seeded = {};
+
+    //clear mongoose
+    seed.mongoose = undefined;
+
+    //log seed environment
+    logger &&
+      (logger.debug || logger.log)('finish seeding %s data', options.environment);
+
     done(error, seeds);
+
   });
 
 }
@@ -140,6 +152,11 @@ exports = module.exports = function (options, done) {
     done = options;
     options = {};
   }
+
+  //obtain provided mongoose
+  mongoose = options.mongoose || require('mongoose');
+  seed.mongoose = mongoose;
+  delete options.mongoose;
 
   //defaults configurations
   options = _.merge({}, {
